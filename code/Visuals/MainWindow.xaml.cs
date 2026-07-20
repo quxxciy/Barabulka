@@ -12,7 +12,10 @@ namespace Barabulka2
     public partial class MainWindow : Window
     {
         private List<Fish> _fishes = new List<Fish>();
-        string[] fishImages = { "images/var1.png", "images/var2.png" };
+        //string[] fishImages = { "images/var1.png", "images/var2.png" };
+        private List<string> fishImages = new List<string>();
+        private const string DefaultFishImage = "images/var1.png";
+
         private readonly Random _rand = new Random();
 
         private const double DespawnMargin = 250;
@@ -58,6 +61,17 @@ namespace Barabulka2
             this.Top = SystemParameters.VirtualScreenTop;
             this.Width = SystemParameters.VirtualScreenWidth;
             this.Height = SystemParameters.VirtualScreenHeight;
+
+            // --- Авто поиск картинок ---
+            string imagesDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "images");
+
+            if (System.IO.Directory.Exists(imagesDir))
+            {
+                var allowedExtensions = new[] { ".png", ".jpg", ".jpeg" };
+                fishImages = System.IO.Directory.GetFiles(imagesDir)
+                    .Where(file => allowedExtensions.Contains(System.IO.Path.GetExtension(file).ToLower()))
+                    .ToList();
+            }
 
             _fishes = new List<Fish>();
             for (int i = 0; i < _settings.FishCount; i++)
@@ -201,12 +215,22 @@ namespace Barabulka2
 
         private void CreateFish(int index)
         {
-            string fullPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fishImages[index % fishImages.Length]);
+            string fullPath;
+
+            if (fishImages != null && fishImages.Count > 0)
+            {
+                fullPath = fishImages[index % fishImages.Count];
+            }
+            else
+            {
+                fullPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, DefaultFishImage);
+            }
 
             var image = new Image
             {
                 Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(fullPath, UriKind.Absolute))
             };
+
             RenderOptions.SetCachingHint(image, CachingHint.Cache);
 
             int idx = index;
