@@ -3,10 +3,10 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+	  <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-<<<<<<< HEAD
     <AssemblyTitle>Barabulka</AssemblyTitle>
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
@@ -16,11 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-=======
-  </PropertyGroup>
-
-  <ItemGroup>
->>>>>>> b7850e3addb0b53dab7b7203548a6bc0c3569258
     <None Update="images\var1.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CustomToolNamespace></CustomToolNamespace>

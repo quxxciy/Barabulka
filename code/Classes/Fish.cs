@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
+using Point = System.Windows.Point;
 namespace Barabulka2
 {
     public class Fish
@@ -42,9 +43,13 @@ namespace Barabulka2
         public System.Windows.Controls.Image Sprite;
         private readonly ScaleTransform _scale;
         private readonly RotateTransform _rotate;
+        private readonly TranslateTransform _translate;
 
         public double FishSize { get; private set; }
         public bool IsFlipped => _isFlipped;
+
+        /// <summary>Глобальный множитель скорости (настройка). Базовая случайная скорость рыбы (см. конструктор) не трогается - только итоговое перемещение.</summary>
+        public double SpeedMultiplier { get; set; } = 1.0;
 
         public double PosX => _posX;
         public double PosY => _posY;
@@ -63,10 +68,12 @@ namespace Barabulka2
 
             _scale = new ScaleTransform(1, 1);
             _rotate = new RotateTransform(0);
+            _translate = new TranslateTransform();
 
             var group = new TransformGroup();
             group.Children.Add(_scale);
             group.Children.Add(_rotate);
+            group.Children.Add(_translate);
 
             Sprite.RenderTransform = group;
             Sprite.RenderTransformOrigin = new Point(0.5, 0.5);
@@ -82,18 +89,24 @@ namespace Barabulka2
             _wagPhase = _rand.NextDouble() * Math.PI * 2;
         }
 
-        public void Move()
+        /// <param name="dtScale">
+        /// Масштаб прошедшего времени относительно эталонных 60 fps (1.0 = один "нормальный" тик).
+        /// Все константы движения изначально тюнились из расчёта ~60 вызовов Move() в секунду,
+        /// поэтому при ограничении FPS (когда Update() вызывается реже) масштаб растёт,
+        /// чтобы итоговая скорость рыб в реальном времени не менялась.
+        /// </param>
+        public void Move(double dtScale = 1.0)
         {
             if (_isFlipped)
             {
-                MoveFlipped();
+                MoveFlipped(dtScale);
                 return;
             }
 
-            if (_flipCooldown > 0) _flipCooldown -= 1;
+            if (_flipCooldown > 0) _flipCooldown -= dtScale;
 
             // Смена курса раз в случайный интервал
-            _wanderTimer -= 1;
+            _wanderTimer -= dtScale;
             if (_wanderTimer <= 0)
             {
                 double baseAngle = AngleOf(_speedX, _speedY);
@@ -102,19 +115,19 @@ namespace Barabulka2
             }
 
             double diff = NormalizeAngle(_targetAngle - _currentAngle);
-            _currentAngle = NormalizeAngle(_currentAngle + diff * 0.02);
+            _currentAngle = NormalizeAngle(_currentAngle + diff * 0.02 * dtScale);
 
             // Базовая скорость + "дыхание" (взмахи хвоста) + редкие рывки
             double baseSpeed = Math.Sqrt(_speedX * _speedX + _speedY * _speedY);
-            _tailPhase += _tailFrequency;
+            _tailPhase += _tailFrequency * dtScale;
             double tailPulse = 1.0 + Math.Sin(_tailPhase) * 0.18; // ±18% от базовой скорости
 
             if (_burstBoost > 0.02)
-                _burstBoost *= BurstDecay;
-            else if (_rand.NextDouble() < BurstChancePerFrame)
+                _burstBoost *= Math.Pow(BurstDecay, dtScale);
+            else if (_rand.NextDouble() < BurstChancePerFrame * dtScale)
                 _burstBoost = 1.2 + _rand.NextDouble() * 1.3; // рывок х2.2-2.5 в моменте
 
-            double speed = baseSpeed * tailPulse * (1.0 + _burstBoost);
+            double speed = baseSpeed * tailPulse * (1.0 + _burstBoost) * SpeedMultiplier * dtScale;
 
             double rad = _currentAngle * Math.PI / 180.0;
             _speedX = Math.Cos(rad) * baseSpeed; // курс/база хранится без пульсации, чтобы не "накапливалась"
@@ -123,22 +136,22 @@ namespace Barabulka2
             _posX += Math.Cos(rad) * speed;
             _posY += Math.Sin(rad) * speed;
 
-            ApplyVisualTransform(rad);
+            ApplyVisualTransform(rad, dtScale);
 
-            Canvas.SetLeft(Sprite, _posX - FishSize / 2);
-            Canvas.SetTop(Sprite, _posY - FishSize / 2);
+            _translate.X = _posX - FishSize / 2;
+            _translate.Y = _posY - FishSize / 2;
         }
 
-        private void MoveFlipped()
+        private void MoveFlipped(double dtScale)
         {
-            _flipTimer -= 1;
-            _thrashPhase += 0.9;
+            _flipTimer -= dtScale;
+            _thrashPhase += 0.9 * dtScale;
 
             // резко дёргается на месте почти без поступательного движения - как будто и правда брыкается
             double jitterX = Math.Sin(_thrashPhase * 1.7) * 1.5;
             double jitterY = Math.Cos(_thrashPhase * 1.3) * 1.5;
-            _posX += jitterX + _speedX * 0.15;
-            _posY += jitterY + _speedY * 0.15;
+            _posX += (jitterX + _speedX * 0.15) * dtScale;
+            _posY += (jitterY + _speedY * 0.15) * dtScale;
 
             bool facingLeft = _speedX < 0;
             _scale.ScaleX = facingLeft ? -1 : 1;
@@ -148,8 +161,8 @@ namespace Barabulka2
             double thrash = Math.Sin(_thrashPhase) * 20; // дрожание/брыкание
             _rotate.Angle = NormalizeAngle(baseAngle + thrash);
 
-            Canvas.SetLeft(Sprite, _posX - FishSize / 2);
-            Canvas.SetTop(Sprite, _posY - FishSize / 2);
+            _translate.X = _posX - FishSize / 2;
+            _translate.Y = _posY - FishSize / 2;
 
             if (_flipTimer <= 0)
             {
@@ -163,7 +176,7 @@ namespace Barabulka2
             }
         }
 
-        private void ApplyVisualTransform(double rad)
+        private void ApplyVisualTransform(double rad, double dtScale)
         {
             bool facingLeft = _speedX < 0;
             _scale.ScaleX = facingLeft ? -1 : 1;
@@ -172,7 +185,7 @@ namespace Barabulka2
             double headingDeg = _currentAngle;
             double visualAngle = facingLeft ? -headingDeg + 180 : headingDeg;
 
-            _wagPhase += _wagFrequency;
+            _wagPhase += _wagFrequency * dtScale;
             double wag = Math.Sin(_wagPhase) * _wagAmplitudeDeg * (facingLeft ? -1 : 1);
 
             _rotate.Angle = NormalizeAngle(visualAngle + wag);
